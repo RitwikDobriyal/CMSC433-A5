@@ -1,6 +1,10 @@
 {- | Verification Condition Generation |
    =====================================
 
+Name: Ritwik Dobriyal
+Assignment #5
+CMSC433, Spring 2025 - Section 0101
+
 In this file, you are going to calculate weakest preconditions for
 the non-array part of Mini Dafny, using the Hoare Logic rules we
 introduced in the beginning of the semester to propagate "ensures"
@@ -85,7 +89,12 @@ class Subst a where
 
 instance Subst Expression where
   subst (Var (Proj _ _)) _ _ = error "Ignore arrays for this project"
- subst _ _ _ = undefined
+  subst (Val v) _ _ = Val v -- for values, which don't change when substituting
+  subst (Var (Name n)) x e
+    | n == x = e -- does variable match? if so, we substitute
+    | otherwise = Var (Name n) -- otherwise, we don't do it
+  subst (Op1 op e1) x e = Op1 op (subst e1 x e) -- subexpressions? rerun expression
+  subst (Op2 e1 op e2) x e = Op2 (subst e1 x e) op (subst e2 x e) -- subexpressions? rerun expression
 
 -- | As an example, consider the loop invariant of Square:
 --
@@ -121,7 +130,7 @@ test_substExp = TestList [ "exp-subst" ~: subst wInv "y" wYPlus1 ~?= wInvSubstYY
 --   CAVEAT: But not under binders with the same name!
 
 instance Subst Predicate where
-subst = undefined
+  subst = undefined
 
 test_substPred :: Test
 test_substPred = TestList [ "pred-subst" ~: subst (Forall [] wInv) "y" wYPlus1 ~?= Forall [] wInvSubstYY1 ]
@@ -191,14 +200,14 @@ class WP a where
 
 instance WP Statement where
   wp (Assign (Proj _ _) _) p = error "Ignore arrays for this project"
-wp _ _ = undefined
+  wp _ _ = undefined
 
 -- | You will also need to implement weakest preconditions for blocks
 --   of statements, by repeatedly getting the weakest precondition
 --   starting from the end.
 --   HINT: folds are your friend.
 instance WP Block where
-wp _ _ = undefined
+  wp (Block ss) p = foldr wp p ss -- using foldr b/c of the hint above
 
 {- | Verification conditions |
    ---------------------------
