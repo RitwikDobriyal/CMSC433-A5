@@ -286,10 +286,15 @@ vcStmt p (While inv e b) = -- combining predicate with expression from while
 vcStmt _ _ = []
 
 -- | Then, calculate the while loop verification conditions for blocks.
+-- NOTE: i think this is broken... crap
 vcBlock :: Predicate -> Block -> [Predicate]
-vcBlock p (Block ss) = concatMap (vcStmt p) ss
--- https://zvon.org/other/haskell/Outputprelude/concatMap_f.html;
--- concatmap helps combine results of vcStmt into block
+vcBlock p (Block ss) = 
+  snd $ foldr helper (p, []) ss
+  where
+    helper s (curr, cond) = -- helper function to generate VCs and update
+      let newVC = vcStmt curr s -- get VC from current statement
+      in
+      (wp s curr, newVC ++ cond) -- update results w/new postcondition and VCs
 
 {- | Lifting to Methods |
    ----------------------
