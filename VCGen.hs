@@ -90,7 +90,7 @@ class Subst a where
 instance Subst Expression where
   subst (Var (Proj _ _)) _ _ = error "Ignore arrays for this project"
   subst (Val v) _ _ = Val v -- for values, which don't change when substituting
-  subst (Var (Name n)) x e
+  subst (Var (Name n)) x e -- for variables...
     | n == x = e -- does variable match? if so, we substitute
     | otherwise = Var (Name n) -- otherwise, we don't do it
   subst (Op1 op e1) x e = Op1 op (subst e1 x e) -- subexpressions? rerun expression
@@ -130,7 +130,10 @@ test_substExp = TestList [ "exp-subst" ~: subst wInv "y" wYPlus1 ~?= wInvSubstYY
 --   CAVEAT: But not under binders with the same name!
 
 instance Subst Predicate where
-  subst = undefined
+  subst (Forall ys e) x e'
+    | x `elem` map fst ys = Forall ys e -- if the variable is in the list of bound variables, we don't substitute
+    | otherwise = Forall ys (subst e x e') -- otherwise, we do
+  subst (PredOp op1 op op2) x e = PredOp (subst op1 x e) op (subst op2 x e)
 
 test_substPred :: Test
 test_substPred = TestList [ "pred-subst" ~: subst (Forall [] wInv) "y" wYPlus1 ~?= Forall [] wInvSubstYY1 ]
@@ -200,7 +203,14 @@ class WP a where
 
 instance WP Statement where
   wp (Assign (Proj _ _) _) p = error "Ignore arrays for this project"
-  wp _ _ = undefined
+  wp (Assign (Name n) e) p = subst p n e -- this is for assignments
+  wp (Decl (x, _) e) p = subst p x e -- this is for declarations
+  wp (If e s1 s2) p = -- this predop is for if statements
+    PredOp -- it's predops combined with predops through a conjunction, as shown below
+      (PredOp (Forall [] e) Implies (wp s1 p))
+      Conj
+      (PredOp (Forall [] (Op1 Not e)) Implies (wp s2 p))
+  wp (While inv _ _) p = inv
 
 -- | You will also need to implement weakest preconditions for blocks
 --   of statements, by repeatedly getting the weakest precondition
@@ -268,12 +278,18 @@ test_vcStmt =
 
 -- | To implement this, first, calculate the latter two for a single statement:
 vcStmt :: Predicate -> Statement -> [Predicate]
-vcStmt p (While inv e b) = undefined
+vcStmt p (While inv e b) = -- combining predicate with expression from while
+  [ 
+  PredOp (PredOp inv Conj (Forall [] e)) Implies (wp b inv), -- first predop
+  PredOp (PredOp inv Conj (Forall [] (Op1 Not e))) Implies p -- second predop in list
+  ]
 vcStmt _ _ = []
 
 -- | Then, calculate the while loop verification conditions for blocks.
 vcBlock :: Predicate -> Block -> [Predicate]
-vcBlock = undefined
+vcBlock p (Block ss) = concatMap (vcStmt p) ss
+-- https://zvon.org/other/haskell/Outputprelude/concatMap_f.html;
+-- concatmap helps combine results of vcStmt into block
 
 {- | Lifting to Methods |
    ----------------------
@@ -307,7 +323,8 @@ vc (Method _ _ _ specs (Block ss)) =
   let e = ensures specs
       r = requires specs
   in
-  undefined
+  PredOp r Implies (wp (Block ss) e) : vcBlock e (Block ss)
+  -- implies weakest pre of method body to post with vcBlock, Block, and wp
 
 
 -- | As a complete end-to-end test, the verification conditions for the whole of
