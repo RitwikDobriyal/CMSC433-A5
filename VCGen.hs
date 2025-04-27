@@ -286,7 +286,7 @@ vcStmt p (While inv e b) = -- combining predicate with expression from while
 vcStmt _ _ = []
 
 -- | Then, calculate the while loop verification conditions for blocks.
--- NOTE: i think this is broken... crap
+-- i COOKED i thought i burnt down the kitchen but LETS GOOOOOOO
 vcBlock :: Predicate -> Block -> [Predicate]
 vcBlock p (Block ss) = 
   snd $ foldr helper (p, []) ss
